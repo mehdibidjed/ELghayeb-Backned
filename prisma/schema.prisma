@@ -1,0 +1,181 @@
+// El Ghayeb — database schema (PostgreSQL).
+// Images are never stored: only face embeddings (vectors) and results.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  TEACHER
+}
+
+enum AttendanceStatus {
+  PRESENT // "P"
+  ABSENT // "A"
+  REVIEW // "?" — score between REVIEW_THRESHOLD and PRESENT_THRESHOLD, or ambiguous
+}
+
+enum AttendanceSource {
+  AI
+  MANUAL
+}
+
+enum RunStatus {
+  CAPTURING
+  QUEUED
+  PROCESSING
+  DONE
+  FAILED
+}
+
+model Teacher {
+  id           Int       @id @default(autoincrement())
+  name         String
+  email        String    @unique
+  passwordHash String    @map("password_hash")
+  role         Role      @default(TEACHER)
+  createdAt    DateTime  @default(now()) @map("created_at")
+  sessions     Session[]
+
+  @@map("teachers")
+}
+
+model Group {
+  id       Int       @id @default(autoincrement())
+  name     String    @unique
+  level    String?
+  students Student[]
+  sessions Session[]
+
+  @@map("groups")
+}
+
+model Student {
+  id         Int             @id @default(autoincrement())
+  matricule  String          @unique
+  name       String
+  groupId    Int             @map("group_id")
+  group      Group           @relation(fields: [groupId], references: [id], onDelete: Restrict)
+  embeddings FaceEmbedding[]
+  attendance Attendance[]
+  createdAt  DateTime        @default(now()) @map("created_at")
+
+  @@index([groupId])
+  @@map("students")
+}
+
+// One row per accepted enrollment photo (the AI service compares a face to
+// every reference and keeps the best score, like vision_model does).
+model FaceEmbedding {
+  id        Int      @id @default(autoincrement())
+  studentId Int      @map("student_id")
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  vector    Float[] // 512-d, L2-normalised ArcFace embedding
+  detScore  Float?   @map("det_score")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([studentId])
+  @@map("face_embeddings")
+}
+
+model Room {
+  id       Int       @id @default(autoincrement())
+  name     String    @unique
+  depthM   Float?    @map("depth_m")
+  devices  Device[]
+  sessions Session[]
+
+  @@map("rooms")
+}
+
+// A Raspberry Pi Zero camera node. The plain token is shown once at creation;
+// only its SHA-256 hash is stored.
+model Device {
+  id        Int       @id @default(autoincrement())
+  name      String
+  roomId    Int?      @map("room_id")
+  room      Room?     @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  tokenHash String    @unique @map("token_hash")
+  enabled   Boolean   @default(true)
+  lastSeen  DateTime? @map("last_seen")
+  lastIp    String?   @map("last_ip")
+  info      Json? // last hello/ping payload: firmware, camera, rssi, cpu temp…
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([roomId])
+  @@map("devices")
+}
+
+model Session {
+  id             Int             @id @default(autoincrement())
+  groupId        Int             @map("group_id")
+  group          Group           @relation(fields: [groupId], references: [id])
+  roomId         Int             @map("room_id")
+  room           Room            @relation(fields: [roomId], references: [id])
+  teacherId      Int             @map("teacher_id")
+  teacher        Teacher         @relation(fields: [teacherId], references: [id])
+  subject        String?
+  startsAt       DateTime        @map("starts_at")
+  endsAt         DateTime        @map("ends_at")
+  behaviorActive Boolean         @default(false) @map("behavior_active")
+  attendance     Attendance[]
+  behaviorStats  BehaviorStat[]
+  runs           AttendanceRun[]
+
+  @@index([teacherId, startsAt])
+  @@map("sessions")
+}
+
+// One "Lancer l'appel" click. Lets the UI follow capture → queue → done.
+model AttendanceRun {
+  id          Int       @id @default(autoincrement())
+  sessionId   Int       @map("session_id")
+  session     Session   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  status      RunStatus @default(CAPTURING)
+  shots       Int
+  facesFound  Int?      @map("faces_found")
+  error       String?
+  requestedAt DateTime  @default(now()) @map("requested_at")
+  finishedAt  DateTime? @map("finished_at")
+
+  @@index([sessionId])
+  @@map("attendance_runs")
+}
+
+model Attendance {
+  id         Int              @id @default(autoincrement())
+  sessionId  Int              @map("session_id")
+  session    Session          @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  studentId  Int              @map("student_id")
+  student    Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  status     AttendanceStatus
+  confidence Float?
+  source     AttendanceSource @default(AI)
+  updatedAt  DateTime         @updatedAt @map("updated_at")
+
+  @@unique([sessionId, studentId])
+  @@map("attendance")
+}
+
+// Class-level behaviour percentages, one row per minute. No individual scores.
+model BehaviorStat {
+  id          Int      @id @default(autoincrement())
+  sessionId   Int      @map("session_id")
+  session     Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  minute      DateTime // truncated to the minute
+  samples     Int      @default(0)
+  persons     Float    @default(0) // average people detected per frame
+  attentivePct Float   @default(0) @map("attentive_pct")
+  phonePct    Float    @default(0) @map("phone_pct")
+  headDownPct Float    @default(0) @map("head_down_pct")
+  handUpPct   Float    @default(0) @map("hand_up_pct")
+
+  @@unique([sessionId, minute])
+  @@map("behavior_stats")
+}
