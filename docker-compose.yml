@@ -1,0 +1,55 @@
+# Full stack: docker compose up -d --build
+# Only infra for local dev:  docker compose up -d postgres redis
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: elghayeb
+      POSTGRES_PASSWORD: elghayeb
+      POSTGRES_DB: elghayeb
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U elghayeb"]
+      interval: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 10
+
+  ai:
+    build: ./ai-service
+    volumes:
+      - ../vision_model:/vision_model:ro # the team's face model code
+      - insightface:/root/.insightface # buffalo_l weights (downloaded once)
+      - ./ai-service/models:/service/models:ro # optional YOLO .onnx for behaviour
+    environment:
+      VISION_MODEL_DIR: /vision_model
+    ports:
+      - "${AI_PORT:-8000}:8000"
+
+  api:
+    build: .
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://elghayeb:elghayeb@postgres:5432/elghayeb?schema=public
+      REDIS_URL: redis://redis:6379
+      AI_SERVICE_URL: http://ai:8000
+    ports:
+      - "${API_PORT:-3000}:3000"
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      ai: { condition: service_started }
+
+volumes:
+  pgdata:
+  insightface:
