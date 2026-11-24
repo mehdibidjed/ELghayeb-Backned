@@ -22,9 +22,9 @@ const listQuery = z.object({
 });
 
 const sessionFields = z.object({
-  groupId: z.number().int().positive(),
-  roomId: z.number().int().positive(),
-  teacherId: z.number().int().positive(),
+  groupId: z.number().int().positive().default(1),
+  roomId: z.number().int().positive().default(1),
+  teacherId: z.number().int().positive().optional(),
   subject: z.string().trim().max(120).optional(),
   startsAt: z.coerce.date(),
   endsAt: z.coerce.date(),
@@ -53,9 +53,13 @@ router.get('/:id', validate({ params: idParam }), async (req, res) => {
   res.json(withDevice(await getSessionForUser(req.user, req.valid.params.id)));
 });
 
-router.post('/', requireAdmin, validate({ body: sessionBody }), async (req, res) => {
-  const session = await prisma.session.create({ data: req.valid.body, include: sessionInclude });
-  res.status(201).json(session);
+router.post('/', validate({ body: sessionBody }), async (req, res) => {
+  const data = {
+    ...req.valid.body,
+    teacherId: req.user.role === 'ADMIN' && req.valid.body.teacherId ? req.valid.body.teacherId : req.user.id,
+  };
+  const session = await prisma.session.create({ data, include: sessionInclude });
+  res.status(201).json(withDevice(session));
 });
 
 router.patch(
@@ -112,7 +116,11 @@ router.get('/:id/runs', validate({ params: idParam }), async (req, res) => {
 // POST /api/sessions/:id/behavior/start|stop — "Suivi du comportement"
 router.post('/:id/behavior/start', validate({ params: idParam }), async (req, res) => {
   const session = await getSessionForUser(req.user, req.valid.params.id);
-  if (session.endsAt < new Date()) throw conflict('Session has already ended');
+  if (session.endsAt < new Date()) {
+    const newEndsAt = new Date(Date.now() + 2 * 3600 * 1000);
+    await prisma.session.update({ where: { id: session.id }, data: { endsAt: newEndsAt } });
+    session.endsAt = newEndsAt;
+  }
   if (!driverManager.getByRoom(session.roomId)) throw conflict(`No online camera in room ${session.room.name}`);
   const health = await aiClient.health().catch(() => null);
   if (!health?.behavior) throw unavailable('Behaviour model is not available on the AI service', { health });

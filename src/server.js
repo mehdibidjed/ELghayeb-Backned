@@ -28,6 +28,8 @@ driverManager.on('offline', ({ deviceId, roomId, reason }) =>
 );
 driverManager.start();
 
+// Pure Raspberry Pi Zero WebSocket node architecture (ESP32 retired)
+
 const workers = env.RUN_WORKERS ? [createAttendanceWorker(), createBehaviorWorker()] : [];
 const notifier = startNotifier();
 
