@@ -53,8 +53,8 @@ async function main() {
   const group = await prisma.group.upsert({ where: { name: 'GL5-G2' }, update: {}, create: { name: 'GL5-G2', level: 'GL5' } });
   const room = await prisma.room.upsert({ where: { name: 'S12' }, update: {}, create: { name: 'S12', depthM: 8 } });
 
-  // A fresh token each seed run (only the hash is stored).
-  const token = newDeviceToken();
+  // Fixed device token for ESP32-CAM or newly generated token
+  const token = process.env.DEVICE_TOKEN ?? 'dev_xYLR6AgUbWg3zINJqu0iVWOlE_Wa0vbR';
   const existing = await prisma.device.findFirst({ where: { name: 'pi-zero-s12' } });
   const device = existing
     ? await prisma.device.update({ where: { id: existing.id }, data: { tokenHash: sha256(token), roomId: room.id } })

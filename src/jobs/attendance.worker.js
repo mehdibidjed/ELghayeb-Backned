@@ -49,8 +49,8 @@ export async function processAttendanceJob(job, { ai = aiClient, db = prisma } =
     const prev = existingByStudent.get(s.id);
 
     if (prev?.source === 'MANUAL') continue;
-    if (prev && RANK[prev.status] > RANK[status]) continue;
-    if (prev && RANK[prev.status] === RANK[status] && (prev.confidence ?? -1) >= (confidence ?? -1)) continue;
+    // Allow latest AI roll-call to update student attendance accurately
+    if (prev && prev.status === status && (prev.confidence ?? -1) >= (confidence ?? -1)) continue;
 
     writes.push(
       db.attendance.upsert({

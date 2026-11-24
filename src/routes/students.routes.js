@@ -3,12 +3,13 @@ import multer from 'multer';
 import { z } from 'zod';
 import { badRequest } from '../lib/errors.js';
 import { prisma } from '../lib/prisma.js';
-import { requireAdmin } from '../middlewares/auth.js';
+import { requireRole } from '../middlewares/auth.js';
 import { validate } from '../middlewares/validate.js';
 import { enrollFaces } from '../services/student.service.js';
 import { idParam, optionalId } from './schemas.js';
 
 const router = Router();
+const canManage = requireRole('ADMIN', 'TEACHER');
 // Photos stay in memory: only the embeddings are kept.
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -50,15 +51,15 @@ router.get('/:id', validate({ params: idParam }), async (req, res) => {
   res.json(shape(await prisma.student.findUniqueOrThrow({ where: { id: req.valid.params.id }, select })));
 });
 
-router.post('/', requireAdmin, validate({ body: studentBody }), async (req, res) => {
+router.post('/', canManage, validate({ body: studentBody }), async (req, res) => {
   res.status(201).json(shape(await prisma.student.create({ data: req.valid.body, select })));
 });
 
-router.patch('/:id', requireAdmin, validate({ params: idParam, body: studentBody.partial() }), async (req, res) => {
+router.patch('/:id', canManage, validate({ params: idParam, body: studentBody.partial() }), async (req, res) => {
   res.json(shape(await prisma.student.update({ where: { id: req.valid.params.id }, data: req.valid.body, select })));
 });
 
-router.delete('/:id', requireAdmin, validate({ params: idParam }), async (req, res) => {
+router.delete('/:id', canManage, validate({ params: idParam }), async (req, res) => {
   await prisma.student.delete({ where: { id: req.valid.params.id } });
   res.status(204).end();
 });
@@ -66,7 +67,7 @@ router.delete('/:id', requireAdmin, validate({ params: idParam }), async (req, r
 // POST /api/students/:id/faces — enrolment, multipart field "photos" (up to 5). ?replace=true drops old ones.
 router.post(
   '/:id/faces',
-  requireAdmin,
+  canManage,
   upload.array('photos', 5),
   validate({ params: idParam, query: z.object({ replace: z.enum(['true', 'false']).optional() }) }),
   async (req, res) => {
@@ -83,7 +84,7 @@ router.get('/:id/faces', validate({ params: idParam }), async (req, res) => {
   res.json(faces);
 });
 
-router.delete('/:id/faces', requireAdmin, validate({ params: idParam }), async (req, res) => {
+router.delete('/:id/faces', canManage, validate({ params: idParam }), async (req, res) => {
   const { count } = await prisma.faceEmbedding.deleteMany({ where: { studentId: req.valid.params.id } });
   res.json({ deleted: count });
 });
