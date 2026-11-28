@@ -5,6 +5,7 @@ Wall-mounted housing for the El Ghayeb camera node: **Raspberry Pi Zero W**, **C
 It hangs above the board at 2.40 m, tilted **15° down** so the camera sees from about 1.7 m to the back of an 8 m room.
 
 ```
+creality/ ElGhayeb_enclosure_Ender-3_V3_KE_PETG.3mf   ready-to-slice Creality Print project
 stl/      4 printed parts, already oriented for printing
 fusion/   ElGhayeb_camera_node.f3d   full assembly: printed parts + electronics + wiring
           ElGhayeb_Enclosure.py      script that builds the printed parts (all dimensions are parameters)
@@ -22,6 +23,15 @@ fusion/   ElGhayeb_camera_node.f3d   full assembly: printed parts + electronics 
 
 About **81 g of PETG**, 3 h 55 min on an Ender-3 V3 KE (0.4 nozzle, 0.20 mm layers).
 **No supports**: every overhang is ≤ 45° or a short bridge (longest: 23 mm, top of the servo pocket).
+
+### Creality Print project (Ender-3 V3 KE)
+`creality/ElGhayeb_enclosure_Ender-3_V3_KE_PETG.3mf` opens in Creality Print 7.3 with everything set:
+Creality Ender-3 V3 KE 0.4 nozzle · *0.20mm Standard* · *CR-PETG* (230 °C / 70 °C) · 3 walls, 15 % gyroid.
+
+- Plate 1: shell, back lid, camera bracket.
+- Plate 2: wall bracket (per-object: 4 walls, 30 % infill).
+- Tree supports are switched on for the shell and the wall bracket in this project. The geometry prints without
+  them (see above), so you can untick *Enable support* on those two objects to save filament and time.
 
 ### PETG settings
 Nozzle 235–245 °C · bed 75–85 °C · fan 30–50 % (100 % on bridges) · glue stick on smooth PEI ·
